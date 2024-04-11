@@ -3,6 +3,8 @@ use super::*;
 /// Provides automatic parameter conversion in cases where the Windows API expects implicit conversion support.
 ///
 /// There is no need to implement this trait. Blanket implementations are provided for all applicable Windows types.
+
+// TODO: rename AsAbi
 pub trait Param<T: TypeKind, C = <T as TypeKind>::TypeKind>: Sized
 where
     T: Type<T>,
@@ -83,6 +85,7 @@ impl Param<PCSTR> for PSTR {
     }
 }
 
+// TODO: rename AbiValue
 #[doc(hidden)]
 pub enum ParamValue<T: Type<T>> {
     Owned(T),

@@ -27,6 +27,7 @@ mod r#type;
 mod unknown;
 mod variant;
 mod weak;
+mod borrow;
 
 pub use agile_reference::*;
 pub use array::*;
@@ -47,6 +48,7 @@ pub use weak::*;
 pub use windows_implement::implement;
 pub use windows_interface::interface;
 pub use windows_result::*;
+pub use borrow::*;
 
 /// Attempts to load the factory object for the given WinRT class.
 /// This can be used to access COM interfaces implemented on a Windows Runtime class factory.
