@@ -24,6 +24,11 @@ impl<'a, T: Type<T>> std::ops::Deref for Borrow<'a, T> {
 }
 
 impl<'a, T: Type<T>> Borrow<'a, T> {
+    ///
+    pub fn new(abi: T::Abi) -> Self {
+        Self(abi, std::marker::PhantomData)
+    }
+
     /// Returns the borrowed value as a cloned result.
     pub fn ok(&self) -> Result<T> {
         T::from_default(self)

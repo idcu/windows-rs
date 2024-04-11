@@ -93,6 +93,7 @@ pub enum ParamValue<T: Type<T>> {
 }
 
 impl<T: Type<T>> ParamValue<T> {
+    // TODO: return Borrow
     pub fn abi(&self) -> T::Abi {
         unsafe {
             match self {
@@ -100,6 +101,10 @@ impl<T: Type<T>> ParamValue<T> {
                 Self::Borrowed(borrowed) => std::mem::transmute_copy(borrowed),
             }
         }
+    }
+
+    pub unsafe fn borrow<'a>(&'a self) -> Borrow<'a, T> {
+        Borrow::new(self.abi())
     }
 }
 

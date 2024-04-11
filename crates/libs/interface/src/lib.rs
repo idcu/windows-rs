@@ -125,19 +125,13 @@ impl Interface {
                 let vis = &m.visibility;
                 let name = &m.name;
 
-                let args = m.gen_args();
-                let params = &m
-                    .args
-                    .iter()
-                    .map(|a| {
-                        let pat = &a.pat;
-                        quote! { #pat }
-                    })
-                    .collect::<Vec<_>>();
+                let generics = m.gen_consume_generics();
+                let params = m.gen_consume_params();
+                let args = m.gen_consume_args();
                 let ret = &m.ret;
                 quote! {
-                    #vis unsafe fn #name(&self, #(#args),*) #ret {
-                        (::windows_core::Interface::vtable(self).#name)(::windows_core::Interface::as_raw(self), #(#params),*)
+                    #vis unsafe fn #name<#(#generics),*>(&self, #(#params),*) #ret {
+                        (::windows_core::Interface::vtable(self).#name)(::windows_core::Interface::as_raw(self), #(#args),*)
                     }
                 }
             })
@@ -516,6 +510,54 @@ impl InterfaceMethod {
             })
             .collect::<Vec<_>>()
     }
+
+    fn gen_consume_generics(&self) -> Vec<proc_macro2::TokenStream> {
+        self.args
+            .iter()
+            .enumerate()
+            .filter_map(|(generic_index, a)| {
+                if let Some(ty) = a.borrow_type() {
+                    let generic_ident = quote::format_ident!("P{generic_index}");
+                    Some(quote! { #generic_ident: ::windows_core::Param<#ty> })
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn gen_consume_params(&self) -> Vec<proc_macro2::TokenStream> {
+        self.args
+            .iter()
+            .enumerate()
+            .map(|(generic_index, a)| {
+                let pat = &a.pat;
+
+                if  a.borrow_type().is_some() {
+                    let generic_ident = quote::format_ident!("P{generic_index}");
+                    quote! { #pat: #generic_ident }
+                } else {
+                    let ty = &a.ty;
+                    quote! { #pat: #ty }
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn gen_consume_args(&self) -> Vec<proc_macro2::TokenStream> {
+        self.args
+            .iter()
+            .map(|a| {
+                let pat = &a.pat;
+
+                if  a.borrow_type().is_some() {
+                    quote! { #pat.param().borrow() }
+                } else {
+                    quote! { #pat }
+                }
+            })
+            .collect::<Vec<_>>()
+    }
 }
 
 impl syn::parse::Parse for InterfaceMethod {
@@ -553,4 +595,24 @@ struct InterfaceMethodArg {
     pub ty: Box<syn::Type>,
     /// The name of the argument
     pub pat: Box<syn::Pat>,
+}
+
+impl InterfaceMethodArg{
+    fn borrow_type(&self) -> Option<syn::Type> {
+        if let syn::Type::Path(path) = &*self.ty {
+            if let Some(segment) = path.path.segments.last() {
+                if segment.ident == "Borrow" {
+                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                        if args.args.len() == 1 {
+                            if let Some(syn::GenericArgument::Type(ty)) = args.args.first() {
+                                return Some(ty.clone());   
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }   
 }

@@ -51,9 +51,9 @@ fn test() {
         assert_eq!(test.usize(123, &mut output), S_OK);
         assert_eq!(output, 123);
 
-        // assert_eq!(test.hstring(0, std::ptr::null_mut()), E_POINTER);
-        // let mut output = 0;
-        // assert_eq!(test.hstring(123, &mut output), S_OK);
-        // assert_eq!(output, 123);
+        assert_eq!(test.hstring(h!("hello"), std::ptr::null_mut()), E_POINTER);
+        let mut output = HSTRING::new();
+        assert_eq!(test.hstring(h!("hello"), &mut output), S_OK);
+        assert_eq!(&output, h!("hello"));
     }
 }
