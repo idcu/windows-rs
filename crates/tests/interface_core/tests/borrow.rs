@@ -64,6 +64,7 @@ fn test() {
         assert_eq!(test.interface(&test, std::ptr::null_mut()), E_POINTER);
         let mut output = None;
         assert_eq!(test.interface(&test, &mut output), S_OK);
+        let mut output = None;
         assert_eq!(test.interface(Some(&test), &mut output), S_OK);
         assert_eq!(output.as_ref(), Some(&test));
     }
