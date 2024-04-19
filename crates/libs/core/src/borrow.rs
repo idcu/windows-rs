@@ -11,9 +11,9 @@ use super::*;
 /// A wrapper type for borrowed Windows values providing transparent representation.
 
 
-// TODO: rename Abi
+// For input parameters "InAbi" ?
 #[repr(transparent)]
-pub struct Borrow<'a, T: Type<T>>(T::Abi, std::marker::PhantomData<&'a T>); // TODO: should track lifetime
+pub struct Borrow<'a, T: Type<T>>(T::Abi, std::marker::PhantomData<&'a T>); // TODO: why is lifetime needed?
 
 impl<'a, T: Type<T>> std::ops::Deref for Borrow<'a, T> {
     type Target = T::Default;
@@ -41,3 +41,15 @@ impl<'a, T: Type<T>> Borrow<'a, T> {
 // impl<'a, T: Type<T>> AsRef<Borrow<'a, T>> for Option<&'a T> {
 //     fn as_ref(&self) -> &Borrow<'a, T>
 // }
+
+/// For output parameters "OutAbi" ?
+#[repr(transparent)]
+pub struct BorrowMut<'a, T: Type<T>>(*mut T::Abi, std::marker::PhantomData<&'a T>);
+
+impl<'a, T: Type<T>> BorrowMut<'a, T> {
+    ///
+    pub fn write(&mut self, value: T::Default) {
+        unsafe { *self.0 = std::mem::transmute_copy(&value) }
+        std::mem::forget(value);
+    }
+}
