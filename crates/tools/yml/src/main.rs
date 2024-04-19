@@ -27,19 +27,35 @@ jobs:
       matrix:
         include:
           - version: stable
+            host: x86_64-pc-windows-msvc
             target: x86_64-pc-windows-msvc
+            etc:
           - version: nightly
+            host: x86_64-pc-windows-msvc
             target: i686-pc-windows-msvc
+            etc:
           - version: nightly
+            host: x86_64-pc-windows-gnu
             target: x86_64-pc-windows-gnu
+            etc:
           - version: stable
+            host: x86_64-pc-windows-gnu
             target: i686-pc-windows-gnu
+            etc:
+          - version: stable
+            host: x86_64-pc-windows-msvc
+            target: aarch64-pc-windows-msvc
+            etc: --no-run
+          - version: nightly
+            host: x86_64-pc-windows-msvc
+            target: aarch64-pc-windows-msvc
+            etc: --no-run
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Update toolchain
-        run: rustup update --no-self-update ${{ matrix.version }} && rustup default ${{ matrix.version }}-${{ matrix.target }}
+        run: rustup update --no-self-update ${{ matrix.version }} && rustup default ${{ matrix.version }}-${{ matrix.host }}
       - name: Add toolchain target
         run: rustup target add ${{ matrix.target }}
       - name: Install fmt
@@ -66,7 +82,7 @@ jobs:
             &mut yml,
             r"
       - name: Test {name}
-        run:  cargo test -p {name}"
+        run:  cargo test -p {name} --target ${{{{ matrix.target }}}} ${{{{ matrix.etc }}}}"
         )
         .unwrap();
     }
