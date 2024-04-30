@@ -14,6 +14,7 @@ pub fn writer(writer: &Writer, def: metadata::TypeDef, generic_types: &[metadata
     let features = writer.cfg_features(&cfg);
     let args = gen_winrt_abi_args(writer, params);
     let params = gen_winrt_params(writer, params);
+    let noexcept = metadata::method_def_is_noexcept(method);
 
     let return_type_tokens = match &signature.return_type {
         metadata::Type::Void => quote! { () },
@@ -25,6 +26,18 @@ pub fn writer(writer: &Writer, def: metadata::TypeDef, generic_types: &[metadata
                 quote! { #tokens }
             }
         }
+    };
+
+    let return_type_tokens = if noexcept {
+        if metadata::type_is_nullable(&signature.return_type) {
+            quote! { -> Option<#return_type_tokens> }
+        } else if signature.return_type == metadata::Type::Void {
+            quote! {}
+        } else {
+            quote! { -> #return_type_tokens }
+        }
+    } else {
+        quote! { -> windows_core::Result<#return_type_tokens> }
     };
 
     let return_arg = match &signature.return_type {
@@ -39,30 +52,58 @@ pub fn writer(writer: &Writer, def: metadata::TypeDef, generic_types: &[metadata
         }
     };
 
+    let vcall = quote! { (windows_core::Interface::vtable(this).#vname)(windows_core::Interface::as_raw(this), #args #return_arg) };
+
     let vcall = match &signature.return_type {
         metadata::Type::Void => {
-            quote! {
-                (windows_core::Interface::vtable(this).#vname)(windows_core::Interface::as_raw(this), #args).ok()
+            if noexcept {
+                quote! {
+                    _ = #vcall;
+                }
+            } else {
+                quote! {
+                    #vcall.ok()
+                }
             }
         }
         _ if signature.return_type.is_winrt_array() => {
-            quote! {
-                let mut result__ = core::mem::MaybeUninit::zeroed();
-                (windows_core::Interface::vtable(this).#vname)(windows_core::Interface::as_raw(this), #args #return_arg)
-                    .map(|| result__.assume_init())
+            if noexcept {
+                quote! {
+                    let mut result__ = core::mem::MaybeUninit::zeroed();
+                    _ = #vcall;
+                    result__.assume_init()
+                }
+            } else {
+                quote! {
+                    let mut result__ = core::mem::MaybeUninit::zeroed();
+                    #vcall
+                        .map(|| result__.assume_init())
+                }
             }
         }
         _ => {
-            let map = if metadata::type_is_blittable(&signature.return_type) {
-                quote! { map(||result__) }
+            if noexcept {
+                if metadata::type_is_blittable(&signature.return_type) {
+                    quote! {
+                            let mut result__ = std::mem::zeroed();
+                            _ = #vcall;
+                            result__ }
+                } else {
+                    quote! {
+                            let mut result__ = std::mem::zeroed();
+                            _ = #vcall;
+                            core::mem::transmute(result__) }
+                }
             } else {
-                quote! { and_then(|| windows_core::Type::from_abi(result__)) }
-            };
-
-            quote! {
-                let mut result__ = std::mem::zeroed();
-                    (windows_core::Interface::vtable(this).#vname)(windows_core::Interface::as_raw(this), #args #return_arg)
-                        .#map
+                if metadata::type_is_blittable(&signature.return_type) {
+                    quote! {
+                        let mut result__ = std::mem::zeroed();
+                        #vcall
+                        .map(||result__) }
+                } else {
+                    quote! { let mut result__ = std::mem::zeroed();
+                    #vcall.and_then(|| windows_core::Type::from_abi(result__)) }
+                }
             }
         }
     };
@@ -70,7 +111,7 @@ pub fn writer(writer: &Writer, def: metadata::TypeDef, generic_types: &[metadata
     match kind {
         metadata::InterfaceKind::Default => quote! {
             #features
-            pub fn #name<#generics>(&self, #params) -> windows_core::Result<#return_type_tokens> #where_clause {
+            pub fn #name<#generics>(&self, #params) #return_type_tokens #where_clause {
                 let this = self;
                 unsafe {
                     #vcall
@@ -80,7 +121,7 @@ pub fn writer(writer: &Writer, def: metadata::TypeDef, generic_types: &[metadata
         metadata::InterfaceKind::None | metadata::InterfaceKind::Base | metadata::InterfaceKind::Overridable => {
             quote! {
                 #features
-                pub fn #name<#generics>(&self, #params) -> windows_core::Result<#return_type_tokens> #where_clause {
+                pub fn #name<#generics>(&self, #params) #return_type_tokens #where_clause {
                     let this = &windows_core::Interface::cast::<#interface_name>(self)?;
                     unsafe {
                         #vcall
@@ -91,7 +132,7 @@ pub fn writer(writer: &Writer, def: metadata::TypeDef, generic_types: &[metadata
         metadata::InterfaceKind::Static => {
             quote! {
                 #features
-                pub fn #name<#generics>(#params) -> windows_core::Result<#return_type_tokens> #where_clause {
+                pub fn #name<#generics>(#params) #return_type_tokens #where_clause {
                     Self::#interface_name(|this| unsafe { #vcall })
                 }
             }
